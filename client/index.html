@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+
+    <title>WS Chatroom</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="style.css">
+
+    <script src="../socket.io/socket.io.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/8.0.20/jsrsasign-all-min.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.7.1/dist/cdn.min.js"></script>
+  </head>
+
+  <body>
+
+    <div id="newClient" x-show="!$store.appState.isInitialized()" x-data="{ randomColor: $store.appState.colorGenerator() }">
+      <div id="loginCard">
+        <div x-bind:style="`background-color: ${randomColor}; height: 4rem; margin-bottom: 0.5rem` "></div>
+
+        <span>Username</span>
+        <form id="loginForm" action="" x-data="{ username: '' }" @submit.prevent="if (username) { $store.appState.newClient(username, randomColor); username = ''; }">
+
+          <input id="loginUsername" autocomplete="off" x-model="username" />
+          <button>Start Chatting</button>
+
+        </form>
+
+        <div x-text="$store.appState.clientErrors" style="color: red; margin-top: 0.5rem;"></div>
+
+      </div>
+    </div>
+
+    <div id="chatRoom" x-show="$store.appState.isInitialized()" x-data="chatState">
+
+      <ul id="messages" x-data="messages">
+        <template x-for="message in messages">
+          <li>
+            <div x-text="`Username: ${JSON.parse(message).username}`" x-bind:style="`background: ${$store.appState.getUserColor(JSON.parse(message).username)}`"></div>
+            <div x-text="`${JSON.parse(message).text}`" style="background: rgba(0, 0, 0, 20%);"></div>
+            <div x-text="`Is valid: ${JSON.parse(message).valid}`"></div>
+          </li>
+        </template>
+      </ul>
+  
+      <form id="form" action="" x-data="{ message: '' }" @submit.prevent="if (message) { sendMessage(message, $store.appState.client); message = ''; }" x-bind:style="`background: ${$store.appState.client.color}`">
+  
+        <input id="input" autocomplete="off" x-model="message" />
+        <span id="count" x-text="message.length"></span>
+  
+        <button>Send</button>
+      </form>
+    </div>
+
+    <script>
+      document.addEventListener('alpine:init', () => {
+        Alpine.store('appState', {
+          clientErrors: '',
+          
+          curve: 'secp256r1',
+          encoding: 'hex',
+          hashAlgorithm: 'sha256',
+
+          client: localStorage.getItem('ws-chatroom-client-info') ? JSON.parse(localStorage.getItem('ws-chatroom-client-info')).client : null,
+
+          init() {
+            if (this.client && this.client.name) {
+              fetch(`/clients/${this.client.name}`, {
+                method: 'GET',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+              }).then(response => {
+                if (response.status != 200) {
+                  // Client pool was reset
+                  localStorage.removeItem('ws-chatroom-client-info');
+                  this.client = null;
+                }
+              }).catch(err => {
+                console.error(err);
+              })
+            }
+          },
+
+          isInitialized() { return this.client != null; },
+
+          newClient(name, color) {
+            var ec = new KJUR.crypto.ECDSA({"curve": "secp256r1"});
+            var keypair = ec.generateKeyPairHex();
+
+            const clientLocal = {
+              name: name,
+              color: color,
+
+              curve: this.curve,
+              encoding: this.encoding,
+              hashAlgorithm: this.hashAlgorithm,
+
+              keypair: keypair,
+            };
+
+            const clientPublic = {
+              name: name,
+              color: color,
+
+              curve: this.curve,
+              encoding: this.encoding,
+              hashAlgorithm: this.hashAlgorithm,
+
+              ecpubhex: keypair.ecpubhex,
+            }
+
+            fetch('/register', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                client: clientPublic
+              }),
+            }).then(response => {
+              if (response.status == 201) {
+                localStorage.setItem('ws-chatroom-client-info', JSON.stringify({client : clientLocal}));
+                this.client = clientLocal;
+                return response.json();
+              }
+            }).then(data => {
+              console.log(data);
+            }).catch(err => {
+              console.error(err);
+            });
+          },
+
+          getUserColor(name) {
+            fetch(`/clients/${name}`, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+            }).then(response => {
+              if (response.status != 200) {
+                return '#ffffff';
+              } else response.json()
+            }).then(data => {
+                return data.color;
+            }).catch(err => {
+              return '#ffffff';
+            });
+          },
+
+          colorGenerator: () => { 
+            var letters = '0123456789ABCDEF';
+            var color = '#';
+            for (var i = 0; i < 6; i++) {
+              color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color; 
+          },
+        });
+
+        Alpine.data('chatState', () => ({
+          socket: {},
+          messages: [],
+
+          init() {
+            this.socket = io();
+
+            this.updateMessages();
+
+            this.socket.on('message', (message) => {
+              this.messages.push(message);
+            });
+          },
+
+          updateMessages() {
+            fetch('/messages')
+              .then(response => {
+                return response.json();
+              })
+              .then(messages => {
+                this.messages = messages;
+              })
+              .catch(err => {
+                console.error(err);
+              });
+          },
+
+          sendMessage(message, client) {
+            var ec = new KJUR.crypto.ECDSA({'curve': this.curve});
+            var hash = KJUR.crypto.Util.sha256(message);
+            var signedHex = ec.signHex(hash, client.keypair.ecprvhex);
+
+            //var ec2 = new KJUR.crypto.ECDSA({'curve': 'secp256r1'});
+            //console.log(ec2.verifyHex(hash, signedHex, keypair.ecpubhex));
+
+            this.socket.emit('message', JSON.stringify({
+              clientName: client.name,
+              text: message,
+              signedMessage: signedHex,
+            }));
+          },
+        }));
+      });
+    </script>
+  </body>
+</html>

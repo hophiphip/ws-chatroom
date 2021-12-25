@@ -1,0 +1,19 @@
+{
+  "name": "ws-chatroom",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.2",
+    "jsrsasign": "^10.5.1",
+    "jsrsasign-util": "^1.0.5",
+    "socket.io": "^4.4.0"
+  }
+}
