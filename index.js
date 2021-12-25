@@ -37,7 +37,8 @@ app.get('/clients/:name', (req, res) => {
     const name = req.params.name;
 
     if (clientPool.getClient(name)) {
-        res.status(200).send(clientPool[name]);
+        console.log(clientPool.getClient(name));
+        res.status(200).send(clientPool.getClient(name));
     } else {
         res.status(404).send({});
     }

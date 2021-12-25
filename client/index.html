@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-
+    <meta charset="UTF-8">
     <title>WS Chatroom</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
@@ -37,7 +37,7 @@
       <ul id="messages" x-data="messages">
         <template x-for="message in messages">
           <li>
-            <div x-text="`Username: ${JSON.parse(message).username}`" x-bind:style="`background: ${$store.appState.getUserColor(JSON.parse(message).username)}`"></div>
+            <div x-text="`Username: ${JSON.parse(message).username}`" x-bind:style="`background: ${ await $store.appState.getUserColor(JSON.parse(message).username)}`"></div>
             <div x-text="`${JSON.parse(message).text}`" style="background: rgba(0, 0, 0, 20%);"></div>
             <div x-text="`Is valid: ${JSON.parse(message).valid}`"></div>
           </li>
@@ -132,19 +132,20 @@
             });
           },
 
-          getUserColor(name) {
-            fetch(`/clients/${name}`, {
+          async getUserColor(name) {
+            
+            return await fetch(`/clients/${name}`, {
               method: 'GET',
               headers: {
                 'Content-Type': 'application/json'
               },
             }).then(response => {
-              if (response.status != 200) {
-                return '#ffffff';
-              } else response.json()
+              return response.status != 200 ? { color: '#ffffff'} : response.json();
             }).then(data => {
+                console.log(data);
                 return data.color;
             }).catch(err => {
+              console.log(err);
               return '#ffffff';
             });
           },
