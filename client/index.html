@@ -192,9 +192,6 @@
             var hash = KJUR.crypto.Util.sha256(message);
             var signedHex = ec.signHex(hash, client.keypair.ecprvhex);
 
-            //var ec2 = new KJUR.crypto.ECDSA({'curve': 'secp256r1'});
-            //console.log(ec2.verifyHex(hash, signedHex, keypair.ecpubhex));
-
             this.socket.emit('message', JSON.stringify({
               clientName: client.name,
               text: message,
