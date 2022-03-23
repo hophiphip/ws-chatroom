@@ -19,6 +19,3 @@ Start the application.
 ```sh
 npm run start
 ```
-
-## Try it out
-  - https://ws-chrm.herokuapp.com/
